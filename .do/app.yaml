@@ -1,0 +1,52 @@
+name: car-dealership-backend
+services:
+- name: api
+  source_dir: /
+  github:
+    repo: ervinkumarIO/backnest-car-dealership
+    branch: main
+  run_command: npm run start:prod
+  environment_slug: node-js
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  routes:
+  - path: /
+  health_check:
+    http_path: /api/v1
+  envs:
+  - key: NODE_ENV
+    value: production
+  - key: PORT
+    value: "8080"
+  - key: DB_HOST
+    value: ${DB_HOST}
+    type: SECRET
+  - key: DB_PORT
+    value: "5432"
+  - key: DB_USERNAME
+    value: ${DB_USERNAME}
+    type: SECRET
+  - key: DB_PASSWORD
+    value: ${DB_PASSWORD}
+    type: SECRET
+  - key: DB_DATABASE
+    value: ${DB_DATABASE}
+    type: SECRET
+  - key: JWT_SECRET
+    value: ${JWT_SECRET}
+    type: SECRET
+  - key: CORS_ORIGIN
+    value: ${CORS_ORIGIN}
+    type: SECRET
+  - key: AWS_ACCESS_KEY_ID
+    value: ${AWS_ACCESS_KEY_ID}
+    type: SECRET
+  - key: AWS_SECRET_ACCESS_KEY
+    value: ${AWS_SECRET_ACCESS_KEY}
+    type: SECRET
+  - key: AWS_REGION
+    value: ${AWS_REGION}
+    type: SECRET
+  - key: AWS_S3_BUCKET
+    value: ${AWS_S3_BUCKET}
+    type: SECRET

@@ -66,7 +66,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   const port = configService.get<number>('PORT', 3000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   console.log(
     `🚀 Car Dealership Backend running on: http://localhost:${port}/api/v1`,
