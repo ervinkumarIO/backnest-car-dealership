@@ -63,7 +63,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // API prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', { exclude: ['/'] });
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port, '0.0.0.0');
