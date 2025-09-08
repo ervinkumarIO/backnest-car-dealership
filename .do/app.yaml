@@ -12,12 +12,12 @@ services:
   routes:
   - path: /
   health_check:
-    http_path: /api/v1
+    http_path: /api/v1/health
   envs:
   - key: NODE_ENV
     value: production
   - key: PORT
-    value: "8080"
+    value: "3000"
   - key: DB_HOST
     value: ${DB_HOST}
     type: SECRET
