@@ -1,7 +1,7 @@
 import { Controller, Post, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { DatabaseService } from './database.service';
 
-@Controller('api/v1/public/database')
+@Controller('public/database')
 export class PublicDatabaseController {
   constructor(private readonly databaseService: DatabaseService) {}
 

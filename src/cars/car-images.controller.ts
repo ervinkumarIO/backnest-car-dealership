@@ -15,7 +15,7 @@ import { CarsService } from './cars.service';
 import { AdminOnly, RolesGuard } from '../common';
 import { S3Service } from './s3.service';
 
-@Controller('api/v1/cars/images')
+@Controller('cars/images')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CarImagesController {
   constructor(
