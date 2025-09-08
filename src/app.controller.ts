@@ -1,6 +1,5 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
-import { Request } from 'express';
 
 @Controller()
 export class AppController {
@@ -18,8 +17,8 @@ export class AppController {
         database: '/api/v1/public/database/status',
         auth: '/api/v1/auth/admin/login',
         cars: '/api/v1/cars',
-        public: '/api/v1/public/cars'
-      }
+        public: '/api/v1/public/cars',
+      },
     };
   }
 
@@ -34,8 +33,8 @@ export class AppController {
         database: '/api/v1/public/database/status',
         auth: '/api/v1/auth/admin/login',
         cars: '/api/v1/cars',
-        public: '/api/v1/public/cars'
-      }
+        public: '/api/v1/public/cars',
+      },
     };
   }
 
@@ -44,7 +43,7 @@ export class AppController {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime()
+      uptime: process.uptime(),
     };
   }
 
@@ -53,8 +52,15 @@ export class AppController {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime()
+      uptime: process.uptime(),
     };
   }
 
+  @Get('test')
+  getTest(): any {
+    return {
+      message: 'Test route working',
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
