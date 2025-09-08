@@ -62,8 +62,7 @@ async function bootstrap() {
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // API prefix
-  app.setGlobalPrefix('api/v1', { exclude: ['/'] });
+  // No global prefix - handle full paths in controllers
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port, '0.0.0.0');

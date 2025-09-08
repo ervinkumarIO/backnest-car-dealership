@@ -21,7 +21,7 @@ import {
 } from './dto';
 import { AdminOnly, RolesGuard } from '../common';
 
-@Controller('cars')
+@Controller('api/v1/cars')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CarsController {
   constructor(private readonly carsService: CarsService) {}

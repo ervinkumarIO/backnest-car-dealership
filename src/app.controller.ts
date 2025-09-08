@@ -23,15 +23,14 @@ export class AppController {
     };
   }
 
-  @Get()
-  getHello(): any {
+  @Get('api/v1')
+  getApi(): any {
     return {
       message: 'Car Dealership Backend API',
       version: '1.0.0',
       status: 'running',
       endpoints: {
-        api: '/api/v1',
-        health: '/api/v1/health', 
+        health: '/api/v1/health',
         database: '/api/v1/public/database/status',
         auth: '/api/v1/auth/admin/login',
         cars: '/api/v1/cars',
@@ -40,7 +39,7 @@ export class AppController {
     };
   }
 
-  @Get('health')
+  @Get('api/v1/health')
   getHealth(): any {
     return {
       status: 'ok',
