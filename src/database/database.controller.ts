@@ -3,7 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { DatabaseService } from './database.service';
 import { RolesGuard } from '../common';
 
-@Controller('api/v1/dev/database')
+@Controller('dev/database')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class DatabaseController {
   constructor(private readonly databaseService: DatabaseService) {}
