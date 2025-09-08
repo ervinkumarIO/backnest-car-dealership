@@ -56,4 +56,16 @@ export class AppController {
       uptime: process.uptime()
     };
   }
+
+  @Get('debug')
+  getDebug(@Req() request: Request): any {
+    return {
+      url: request.url,
+      originalUrl: request.originalUrl,
+      path: request.path,
+      baseUrl: request.baseUrl,
+      headers: request.headers,
+      method: request.method
+    };
+  }
 }
