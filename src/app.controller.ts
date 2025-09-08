@@ -47,4 +47,13 @@ export class AppController {
       uptime: process.uptime()
     };
   }
+
+  @Get('health')
+  getSimpleHealth(): any {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    };
+  }
 }
