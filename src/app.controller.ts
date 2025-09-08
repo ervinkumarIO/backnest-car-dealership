@@ -23,7 +23,7 @@ export class AppController {
     };
   }
 
-  @Get()
+  @Get('api/v1')
   getApi(): any {
     return {
       message: 'Car Dealership Backend API',
@@ -39,8 +39,17 @@ export class AppController {
     };
   }
 
-  @Get('health')
+  @Get('api/v1/health')
   getHealth(): any {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    };
+  }
+
+  @Get('health')
+  getSimpleHealth(): any {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),

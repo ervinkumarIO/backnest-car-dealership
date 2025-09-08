@@ -19,7 +19,7 @@ import { UpdateStaffDto } from './dto/update-staff.dto';
 import { AdminOnly } from '../common';
 import { RolesGuard } from '../common';
 
-@Controller('staff')
+@Controller('api/v1/staff')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}

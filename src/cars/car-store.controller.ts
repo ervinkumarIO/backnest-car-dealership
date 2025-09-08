@@ -4,7 +4,7 @@ import { CarsService } from './cars.service';
 import { CreateCarDto } from './dto';
 import { AdminOnly, RolesGuard } from '../common';
 
-@Controller('cars')
+@Controller('api/v1/cars')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class CarStoreController {
   constructor(private readonly carsService: CarsService) {}

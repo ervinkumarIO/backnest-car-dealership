@@ -17,7 +17,7 @@ import { UpdateAdminDto } from './dto/update-admin.dto';
 import { MasterOnly } from '../common';
 import { RolesGuard } from '../common';
 
-@Controller('admin/admins')
+@Controller('api/v1/admin/admins')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
