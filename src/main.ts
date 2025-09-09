@@ -37,6 +37,7 @@ async function bootstrap() {
       'http://localhost:3001',
       'http://localhost:8080',
       'http://localhost:4200',
+      'https://cardealershipmanagement.cognitivecode.dev',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
