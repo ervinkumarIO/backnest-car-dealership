@@ -108,13 +108,24 @@ export class CarImagesController {
     return this.carsService.updateCarImages(body.chassisNo, body.keys);
   }
 
-  // Delete specific images from a car
+  // Delete specific images from a car (Laravel equivalent)
   @Delete(':chassisNo/images')
   @AdminOnly()
   async deleteImages(
     @Param('chassisNo') chassisNo: string,
     @Body() body: { imageUrls: string[] },
   ) {
+    console.log('🎯 Laravel-style deleteImages controller called:', {
+      chassisNo,
+      imageUrls: body.imageUrls,
+      imageCount: body.imageUrls?.length || 0,
+    });
+
+    // Validate request body
+    if (!body.imageUrls) {
+      throw new BadRequestException('imageUrls field is required');
+    }
+
     return this.s3Service.deleteCarImages(chassisNo, body.imageUrls);
   }
 

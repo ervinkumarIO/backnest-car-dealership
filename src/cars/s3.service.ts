@@ -213,6 +213,32 @@ export class S3Service {
 
   // Delete car images from S3 and database (Laravel equivalent)
   async deleteCarImages(chassisNo: string, imageUrls: string[]) {
+    console.log('🗑️ Laravel-style deleteCarImages called:', {
+      chassisNo,
+      imageUrls,
+      imageCount: imageUrls.length,
+    });
+
+    // Validate input (Laravel equivalent validation)
+    if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
+      throw new BadRequestException(
+        'The imageUrls field must be a valid array with at least one URL.',
+      );
+    }
+
+    // Validate each URL (Laravel equivalent validation)
+    for (const url of imageUrls) {
+      if (typeof url !== 'string' || !url.trim()) {
+        throw new BadRequestException('Each imageUrl must be a valid string.');
+      }
+
+      try {
+        new URL(url); // Validate URL format
+      } catch {
+        throw new BadRequestException(`Invalid URL format: ${url}`);
+      }
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -221,29 +247,51 @@ export class S3Service {
       const car = await queryRunner.manager.findOne(Car, {
         where: { chassisNo },
       });
+
+      console.log('🚗 Car found:', car ? 'Yes' : 'No');
+
       if (!car) {
         throw new BadRequestException('Car not found');
       }
 
-      // Ensure images field is an array
+      // Ensure images field is an array (Laravel equivalent)
       const currentImages = Array.isArray(car.image)
         ? (car.image as string[])
         : [];
 
-      // Remove selected images
+      console.log('📸 Current images:', {
+        currentCount: currentImages.length,
+        toDelete: imageUrls.length,
+        currentImages: currentImages,
+        imagesToDelete: imageUrls,
+      });
+
+      // Remove selected images (Laravel: array_diff equivalent)
       const remainingImages = currentImages.filter(
         (url) => !imageUrls.includes(url),
       );
 
-      // Delete from S3
+      console.log('📊 Image processing:', {
+        original: currentImages.length,
+        toDelete: imageUrls.length,
+        remaining: remainingImages.length,
+        actuallyDeleted: currentImages.length - remainingImages.length,
+      });
+
+      // Delete from S3 (Laravel equivalent logic)
+      const deletionResults: Array<{
+        url: string;
+        s3Deleted: boolean;
+        attemptedFilenames?: string[];
+        error?: string;
+      }> = [];
       for (const imageUrl of imageUrls) {
         try {
           const path = new URL(imageUrl).pathname; // e.g. /car-images/filename.jpg
           const filename = path.substring(1); // car-images/filename.jpg
 
-          // Handle URL encoding issues (%20 vs + for spaces)
+          // Handle URL encoding issues (%20 vs + for spaces) - Laravel equivalent
           const decodedFilename = decodeURIComponent(filename);
-          // Create variations of the filename to try
           const filenamesToTry = [
             filename, // Original
             decodedFilename, // URL decoded
@@ -267,7 +315,7 @@ export class S3Service {
                 .promise();
 
               deleted = true;
-              console.log('S3 deletion successful', {
+              console.log('✅ S3 deletion successful:', {
                 original_url: imageUrl,
                 successful_filename: tryFilename,
               });
@@ -276,29 +324,63 @@ export class S3Service {
               // Continue to next variation
             }
           }
+
+          deletionResults.push({
+            url: imageUrl,
+            s3Deleted: deleted,
+            attemptedFilenames: uniqueFilenames,
+          });
+
           if (!deleted) {
-            console.warn('S3 deletion failed for all filename variations', {
+            console.warn('⚠️ S3 deletion failed for all filename variations:', {
               original_url: imageUrl,
               attempted_filenames: uniqueFilenames,
             });
           }
-        } catch (error: any) {
-          console.error('S3 deletion failed', {
+        } catch (error) {
+          console.error('❌ S3 deletion failed:', {
             url: imageUrl,
-            error: (error as Error)?.message || 'Unknown error',
+            error: error instanceof Error ? error.message : String(error),
+          });
+          deletionResults.push({
+            url: imageUrl,
+            s3Deleted: false,
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       }
 
-      // Update database
+      // Update database (Laravel equivalent: $car->image = array_values($remainingImages))
       car.image = remainingImages;
       await queryRunner.manager.save(car);
 
       await queryRunner.commitTransaction();
 
+      console.log('✅ Laravel-style deletion completed:', {
+        chassisNo,
+        requestedDeletions: imageUrls.length,
+        actualDeletions: currentImages.length - remainingImages.length,
+        remainingCount: remainingImages.length,
+        s3SuccessCount: deletionResults.filter((r) => r.s3Deleted).length,
+      });
+
+      // Laravel-compatible response format
       return {
         message: 'Images deleted successfully.',
-        remaining_images: car.image as string[],
+        remaining_images: remainingImages,
+        data: {
+          chassisNo,
+          deletedImages: imageUrls,
+          remainingImages: remainingImages,
+          imageCount: remainingImages.length,
+          deletionResults,
+          summary: {
+            requested: imageUrls.length,
+            actuallyDeleted: currentImages.length - remainingImages.length,
+            s3Successful: deletionResults.filter((r) => r.s3Deleted).length,
+            s3Failed: deletionResults.filter((r) => !r.s3Deleted).length,
+          },
+        },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
