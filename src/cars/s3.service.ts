@@ -547,4 +547,122 @@ export class S3Service {
       await queryRunner.release();
     }
   }
+
+  // Delete car image by index (Frontend compatible)
+  async deleteCarImageByIndex(chassisNo: string, imageIndex: number) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const car = await queryRunner.manager.findOne(Car, {
+        where: { chassisNo },
+      });
+      if (!car) {
+        throw new BadRequestException('Car not found');
+      }
+
+      // Get current images
+      const currentImages = Array.isArray(car.image)
+        ? (car.image as string[])
+        : [];
+
+      if (imageIndex >= currentImages.length) {
+        throw new BadRequestException(
+          `Image index ${imageIndex} out of range. Car has ${currentImages.length} images.`,
+        );
+      }
+
+      // Get the image URL to delete
+      const imageUrlToDelete = currentImages[imageIndex];
+
+      // Remove the image at the specified index
+      const updatedImages = currentImages.filter(
+        (_, index) => index !== imageIndex,
+      );
+
+      // Delete from S3
+      try {
+        const path = new URL(imageUrlToDelete).pathname; // e.g. /car-images/filename.jpg
+        const filename = path.substring(1); // car-images/filename.jpg
+
+        // Handle URL encoding issues (%20 vs + for spaces)
+        const decodedFilename = decodeURIComponent(filename);
+        // Create variations of the filename to try
+        const filenamesToTry = [
+          filename, // Original
+          decodedFilename, // URL decoded
+          filename.replace(/%20/g, '+'), // %20 -> +
+          filename.replace(/\+/g, '%20'), // + -> %20
+          decodedFilename.replace(/ /g, '+'), // spaces -> +
+          decodedFilename.replace(/ /g, '%20'), // spaces -> %20
+        ];
+
+        // Remove duplicates and try each variation
+        const uniqueFilenames = [...new Set(filenamesToTry)];
+        let deleted = false;
+
+        for (const tryFilename of uniqueFilenames) {
+          try {
+            await this.s3
+              .deleteObject({
+                Bucket: this.bucketName,
+                Key: tryFilename,
+              })
+              .promise();
+
+            deleted = true;
+            console.log('S3 deletion successful', {
+              chassisNo,
+              imageIndex,
+              original_url: imageUrlToDelete,
+              successful_filename: tryFilename,
+            });
+            break;
+          } catch {
+            // Continue to next variation
+          }
+        }
+        if (!deleted) {
+          console.warn('S3 deletion failed for all filename variations', {
+            chassisNo,
+            imageIndex,
+            original_url: imageUrlToDelete,
+            attempted_filenames: uniqueFilenames,
+          });
+        }
+      } catch (error: any) {
+        console.error('S3 deletion failed', {
+          chassisNo,
+          imageIndex,
+          url: imageUrlToDelete,
+          error: (error as Error)?.message || 'Unknown error',
+        });
+      }
+
+      // Update database with remaining images
+      car.image = updatedImages;
+      await queryRunner.manager.save(car);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Image deleted successfully',
+        data: {
+          chassisNo,
+          deletedImageIndex: imageIndex,
+          deletedImageUrl: imageUrlToDelete,
+          remainingImages: updatedImages,
+          imageCount: updatedImages.length,
+        },
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        `Error deleting image: ${(error as Error)?.message || 'Unknown error'}`,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }

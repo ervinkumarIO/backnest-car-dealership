@@ -118,6 +118,20 @@ export class CarImagesController {
     return this.s3Service.deleteCarImages(chassisNo, body.imageUrls);
   }
 
+  // Delete specific image by index (Frontend compatible)
+  @Delete(':chassisNo/:imageIndex')
+  @AdminOnly()
+  async deleteImageByIndex(
+    @Param('chassisNo') chassisNo: string,
+    @Param('imageIndex') imageIndex: string,
+  ) {
+    const index = parseInt(imageIndex, 10);
+    if (isNaN(index) || index < 0) {
+      throw new BadRequestException('Invalid image index');
+    }
+    return await this.s3Service.deleteCarImageByIndex(chassisNo, index);
+  }
+
   // Add images to specific car (Laravel equivalent route)
   @Post('add-images/:chassisNo')
   @AdminOnly()
