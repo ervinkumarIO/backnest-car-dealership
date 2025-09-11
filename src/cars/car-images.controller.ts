@@ -141,6 +141,39 @@ export class CarImagesController {
     return await this.s3Service.deleteCarImageByIndex(chassisNo, index);
   }
 
+  // Bulk delete images by indices (Recommended for frontend)
+  @Delete(':chassisNo/bulk-images')
+  @AdminOnly()
+  async bulkDeleteImagesByIndices(
+    @Param('chassisNo') chassisNo: string,
+    @Body() body: { indices: number[] },
+  ) {
+    console.log('🗑️ BulkDeleteImagesByIndices called:', {
+      chassisNo,
+      indices: body.indices,
+    });
+
+    if (!Array.isArray(body.indices) || body.indices.length === 0) {
+      throw new BadRequestException(
+        'Indices array is required and must not be empty',
+      );
+    }
+
+    // Validate all indices are valid numbers
+    for (const index of body.indices) {
+      if (typeof index !== 'number' || index < 0 || !Number.isInteger(index)) {
+        throw new BadRequestException(
+          `Invalid index: ${index}. All indices must be non-negative integers.`,
+        );
+      }
+    }
+
+    return await this.s3Service.bulkDeleteCarImagesByIndices(
+      chassisNo,
+      body.indices,
+    );
+  }
+
   // Add images to specific car (Laravel equivalent route)
   @Post('add-images/:chassisNo')
   @AdminOnly()

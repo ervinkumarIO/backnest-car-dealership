@@ -688,4 +688,196 @@ export class S3Service {
       await queryRunner.release();
     }
   }
+
+  // Bulk delete car images by indices (Recommended approach)
+  async bulkDeleteCarImagesByIndices(chassisNo: string, indices: number[]) {
+    console.log('🗑️ BulkDeleteCarImagesByIndices called:', {
+      chassisNo,
+      indices,
+    });
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const car = await queryRunner.manager.findOne(Car, {
+        where: { chassisNo },
+      });
+
+      if (!car) {
+        console.log('❌ Car not found for chassis:', chassisNo);
+        throw new BadRequestException('Car not found');
+      }
+
+      // Get current images
+      const currentImages = Array.isArray(car.image)
+        ? (car.image as string[])
+        : [];
+
+      console.log('📸 Current images:', {
+        imageCount: currentImages.length,
+        requestedIndices: indices,
+        images: currentImages,
+      });
+
+      // Validate all indices are within bounds
+      const invalidIndices = indices.filter(
+        (index) => index >= currentImages.length,
+      );
+      if (invalidIndices.length > 0) {
+        throw new BadRequestException(
+          `Invalid indices: [${invalidIndices.join(', ')}]. Car has ${currentImages.length} images (valid indices: 0-${currentImages.length - 1}).`,
+        );
+      }
+
+      // Check for duplicate indices
+      const uniqueIndices = [...new Set(indices)];
+      if (uniqueIndices.length !== indices.length) {
+        console.log(
+          '⚠️ Duplicate indices detected, using unique set:',
+          uniqueIndices,
+        );
+      }
+
+      // Sort indices in descending order to avoid reindexing issues during deletion
+      const sortedIndices = uniqueIndices.sort((a, b) => b - a);
+      console.log('🔢 Sorted indices (desc):', sortedIndices);
+
+      // Get URLs of images to delete
+      const imagesToDelete = sortedIndices.map((index) => ({
+        index,
+        url: currentImages[index],
+      }));
+
+      console.log('🎯 Images to delete:', imagesToDelete);
+
+      // Delete from S3
+      const deletionResults: Array<{
+        index: number;
+        url: string;
+        s3Deleted: boolean;
+        attemptedFilenames?: string[];
+        error?: string;
+      }> = [];
+      for (const { index, url } of imagesToDelete) {
+        try {
+          const path = new URL(url).pathname;
+          const filename = path.substring(1);
+
+          // Handle URL encoding variations
+          const decodedFilename = decodeURIComponent(filename);
+          const filenamesToTry = [
+            filename,
+            decodedFilename,
+            filename.replace(/%20/g, '+'),
+            filename.replace(/\+/g, '%20'),
+            decodedFilename.replace(/ /g, '+'),
+            decodedFilename.replace(/ /g, '%20'),
+          ];
+
+          const uniqueFilenames = [...new Set(filenamesToTry)];
+          let deleted = false;
+
+          for (const tryFilename of uniqueFilenames) {
+            try {
+              await this.s3
+                .deleteObject({
+                  Bucket: this.bucketName,
+                  Key: tryFilename,
+                })
+                .promise();
+
+              deleted = true;
+              console.log('✅ S3 deletion successful:', {
+                index,
+                url,
+                filename: tryFilename,
+              });
+              break;
+            } catch {
+              // Continue to next variation
+            }
+          }
+
+          deletionResults.push({
+            index,
+            url,
+            s3Deleted: deleted,
+            attemptedFilenames: uniqueFilenames,
+          });
+
+          if (!deleted) {
+            console.warn('⚠️ S3 deletion failed for all variations:', {
+              index,
+              url,
+              attemptedFilenames: uniqueFilenames,
+            });
+          }
+        } catch (error) {
+          console.error('❌ Error processing image deletion:', {
+            index,
+            url,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          deletionResults.push({
+            index,
+            url,
+            s3Deleted: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // Remove images from array (in descending order to avoid index shifting)
+      const updatedImages = [...currentImages];
+      for (const index of sortedIndices) {
+        updatedImages.splice(index, 1);
+      }
+
+      console.log('📸 Updated images array:', {
+        originalCount: currentImages.length,
+        deletedCount: sortedIndices.length,
+        remainingCount: updatedImages.length,
+        remaining: updatedImages,
+      });
+
+      // Update database
+      car.image = updatedImages;
+      await queryRunner.manager.save(car);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Images deleted successfully',
+        data: {
+          chassisNo,
+          deletedIndices: sortedIndices,
+          deletedImages: imagesToDelete.map((img) => img.url),
+          remainingImages: updatedImages,
+          imageCount: updatedImages.length,
+          deletionResults,
+          summary: {
+            requested: indices.length,
+            processed: uniqueIndices.length,
+            successful: deletionResults.filter((r) => r.s3Deleted).length,
+            failed: deletionResults.filter((r) => !r.s3Deleted).length,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('❌ Error in bulkDeleteCarImagesByIndices:', {
+        chassisNo,
+        indices,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        `Error deleting images: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
