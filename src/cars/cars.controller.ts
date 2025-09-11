@@ -57,7 +57,6 @@ export class CarsController {
 
   // Car statistics
   @Get('stats')
-  @AdminOnly()
   async getCarStats() {
     console.log('Fetching car statistics...');
     const stats = await this.carsService.getCarStats();
@@ -67,7 +66,6 @@ export class CarsController {
 
   // Alternative stats endpoint path
   @Get('statistics')
-  @AdminOnly()
   async getStatistics() {
     return this.carsService.getCarStats();
   }
