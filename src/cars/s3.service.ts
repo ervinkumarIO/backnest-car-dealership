@@ -550,6 +550,8 @@ export class S3Service {
 
   // Delete car image by index (Frontend compatible)
   async deleteCarImageByIndex(chassisNo: string, imageIndex: number) {
+    console.log('🔍 DeleteCarImageByIndex called:', { chassisNo, imageIndex });
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -558,7 +560,11 @@ export class S3Service {
       const car = await queryRunner.manager.findOne(Car, {
         where: { chassisNo },
       });
+
+      console.log('🚗 Car found:', car ? 'Yes' : 'No');
+
       if (!car) {
+        console.log('❌ Car not found for chassis:', chassisNo);
         throw new BadRequestException('Car not found');
       }
 
@@ -567,7 +573,18 @@ export class S3Service {
         ? (car.image as string[])
         : [];
 
+      console.log('📸 Current images:', {
+        isArray: Array.isArray(car.image),
+        imageCount: currentImages.length,
+        imageIndex,
+        images: currentImages,
+      });
+
       if (imageIndex >= currentImages.length) {
+        console.log('❌ Image index out of range:', {
+          requestedIndex: imageIndex,
+          availableImages: currentImages.length,
+        });
         throw new BadRequestException(
           `Image index ${imageIndex} out of range. Car has ${currentImages.length} images.`,
         );
@@ -657,6 +674,12 @@ export class S3Service {
         },
       };
     } catch (error) {
+      console.error('❌ Error in deleteCarImageByIndex:', {
+        chassisNo,
+        imageIndex,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       await queryRunner.rollbackTransaction();
       throw new BadRequestException(
         `Error deleting image: ${(error as Error)?.message || 'Unknown error'}`,

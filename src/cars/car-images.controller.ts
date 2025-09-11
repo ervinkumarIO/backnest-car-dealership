@@ -125,8 +125,17 @@ export class CarImagesController {
     @Param('chassisNo') chassisNo: string,
     @Param('imageIndex') imageIndex: string,
   ) {
+    console.log('🎯 DeleteImageByIndex controller called:', {
+      chassisNo,
+      imageIndex,
+      imageIndexType: typeof imageIndex,
+    });
+
     const index = parseInt(imageIndex, 10);
+    console.log('🔢 Parsed index:', { index, isNaN: isNaN(index) });
+
     if (isNaN(index) || index < 0) {
+      console.log('❌ Invalid image index:', { imageIndex, index });
       throw new BadRequestException('Invalid image index');
     }
     return await this.s3Service.deleteCarImageByIndex(chassisNo, index);
