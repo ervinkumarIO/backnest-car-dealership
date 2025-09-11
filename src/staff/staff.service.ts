@@ -126,30 +126,21 @@ export class StaffService {
 
   // For soldBy selector functionality
   async getSoldBySelector(): Promise<{
-    staff: Array<{ staffId: string; name: string; branch: string }>;
-    branches: string[];
+    staffIds: string[];
   }> {
     try {
       const staff = await this.staffRepository
         .createQueryBuilder('staff')
-        .select(['staff.staffId', 'staff.name', 'staff.branch'])
+        .select(['staff.staffId'])
         .getMany();
 
-      const branches = ['JB', 'SLGR', 'KL', 'PPG', 'SBH']; // Static branches from Laravel
-
       return {
-        staff: staff.map((s) => ({
-          staffId: s.staffId,
-          name: s.name,
-          branch: s.branch,
-        })),
-        branches,
+        staffIds: staff.map((s) => s.staffId),
       };
     } catch (error) {
       console.error('Error fetching staff for selector:', error);
       return {
-        staff: [],
-        branches: ['JB', 'SLGR', 'KL', 'PPG', 'SBH'],
+        staffIds: [],
       };
     }
   }
