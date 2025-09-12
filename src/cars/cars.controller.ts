@@ -118,9 +118,8 @@ export class CarsController {
     return this.carsService.bulkDelete(bulkDeleteDto);
   }
 
-  // Get single car by chassis number
+  // Get single car by chassis number (available for all authenticated users)
   @Get(':chassisNo')
-  @AdminOnly()
   async findOne(@Param('chassisNo') chassisNo: string) {
     return this.carsService.findOne(chassisNo);
   }
