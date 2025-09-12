@@ -26,9 +26,8 @@ import { AdminOnly, RolesGuard } from '../common';
 export class CarsController {
   constructor(private readonly carsService: CarsService) {}
 
-  // Car listing endpoint (simplified for admin listing view)
+  // Car listing endpoint (available for all authenticated users)
   @Get('listing')
-  @AdminOnly()
   async getCarListing(@Query() query: Record<string, string>) {
     // Parse query parameters according to dashboard specification
 
