@@ -112,7 +112,7 @@ export class CarsController {
   }
 
   // Bulk delete cars
-  @Delete('bulk')
+  @Delete('bulk-delete')
   @AdminOnly()
   async bulkDelete(@Body() bulkDeleteDto: BulkDeleteDto) {
     return this.carsService.bulkDelete(bulkDeleteDto);
