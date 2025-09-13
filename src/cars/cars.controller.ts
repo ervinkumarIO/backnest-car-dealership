@@ -78,7 +78,6 @@ export class CarsController {
 
   // Get facets for filtering
   @Get('facets')
-  @AdminOnly()
   async getFacets(@Query() query: any) {
     return this.carsService.getFacets(query);
   }

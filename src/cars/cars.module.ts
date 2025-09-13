@@ -5,7 +5,6 @@ import { CarsController } from './cars.controller';
 import { CarStoreController } from './car-store.controller';
 import { CarImagesController } from './car-images.controller';
 import { PublicViewController } from './public-view.controller';
-import { PublicController } from './public.controller';
 import { CarsService } from './cars.service';
 import { S3Service } from './s3.service';
 import { Car } from '../entities';
@@ -26,7 +25,6 @@ import { AuthModule } from '../auth/auth.module';
     CarStoreController,
     CarImagesController,
     PublicViewController,
-    PublicController,
   ],
   providers: [CarsService, S3Service],
   exports: [CarsService, S3Service],

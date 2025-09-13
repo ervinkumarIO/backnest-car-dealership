@@ -339,17 +339,87 @@ export class CarsService {
     };
   }
 
-  // Get facets for filtering
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getFacets(_query: any) {
-    // This is a complex method that would need custom query building
-    // For now, return basic structure
-    const cars = await this.carRepository.find();
+  // Get facets for filtering with progressive filtering support
+  async getFacets(query: CarListingQuery) {
+    const { search, ...filters } = query;
+
+    // Build the same query as getCarListing but without pagination
+    const queryBuilder = this.carRepository
+      .createQueryBuilder('car')
+      .select([
+        'car.chassisNo',
+        'car.brand',
+        'car.model',
+        'car.variant',
+        'car.price',
+        'car.year',
+        'car.color',
+        'car.transmission',
+        'car.fuelType',
+        'car.mileage',
+        'car.grade',
+        'car.status',
+        'car.condition',
+        'car.features',
+        'car.image',
+        'car.remarks',
+        'car.branch',
+        'car.created_at',
+        'car.updated_at',
+        'car.soldBy',
+        'car.soldAt',
+        'car.public',
+      ]);
+
+    // Apply search (case-insensitive)
+    if (search) {
+      queryBuilder.where(
+        '(LOWER(car.brand) LIKE LOWER(:search) OR LOWER(car.model) LIKE LOWER(:search) OR LOWER(car.variant) LIKE LOWER(:search) OR LOWER(car.chassisNo) LIKE LOWER(:search) OR LOWER(car.color) LIKE LOWER(:search))',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Apply filters (same logic as getCarListing)
+    Object.keys(filters).forEach((key) => {
+      if (
+        filters[key] &&
+        key !== 'search' &&
+        key !== 'sortBy' &&
+        key !== 'sortOrder' &&
+        key !== 'perPage' &&
+        key !== 'page'
+      ) {
+        // Handle price range filtering
+        if (key === 'price_min') {
+          const priceMin = Number(filters[key]);
+          if (!isNaN(priceMin)) {
+            queryBuilder.andWhere('car.price >= :price_min', {
+              price_min: priceMin,
+            });
+          }
+        } else if (key === 'price_max') {
+          const priceMax = Number(filters[key]);
+          if (!isNaN(priceMax)) {
+            queryBuilder.andWhere('car.price <= :price_max', {
+              price_max: priceMax,
+            });
+          }
+        } else {
+          // Regular field filtering
+          queryBuilder.andWhere(`car.${key} = :${key}`, {
+            [key]: String(filters[key]),
+          });
+        }
+      }
+    });
+
+    // Get filtered cars (no pagination for facets)
+    const cars = await queryBuilder.getMany();
 
     const facets = {};
     const chassisNumbers = cars.map((car) => car.chassisNo);
 
-    // Build facets for each field
+    // Build facets for each field based on filtered results
     const fields = [
       'brand',
       'model',
@@ -368,7 +438,9 @@ export class CarsService {
           const value = (car as unknown as Record<string, unknown>)[
             field
           ] as string;
-          acc[value] = (acc[value] || 0) + 1;
+          if (value) {
+            acc[value] = (acc[value] || 0) + 1;
+          }
           return acc;
         },
         {} as Record<string, number>,
@@ -378,6 +450,22 @@ export class CarsService {
         facets[field] = fieldValues;
       }
     });
+
+    // Add price range facets
+    if (cars.length > 0) {
+      const prices = cars
+        .map((car) => car.price)
+        .filter((price) => price != null);
+      if (prices.length > 0) {
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        facets['price_range'] = {
+          min: minPrice,
+          max: maxPrice,
+          count: cars.length,
+        };
+      }
+    }
 
     return {
       chassis_numbers: chassisNumbers,
