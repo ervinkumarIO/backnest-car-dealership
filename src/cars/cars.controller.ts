@@ -29,20 +29,8 @@ export class CarsController {
   // Car listing endpoint (available for all authenticated users)
   @Get('listing')
   async getCarListing(@Query() query: Record<string, string>) {
-    // Parse query parameters according to dashboard specification
-
-    const parsedQuery = {
-      search: query?.search,
-      status: query?.status || query?.['status[eq]'],
-      condition: query?.condition || query?.['condition[eq]'],
-      sortBy: query?.sortBy || 'chassisNo',
-      sortOrder: (query?.sortOrder || 'asc') as 'asc' | 'desc',
-      page: parseInt(query?.page) || 1,
-      perPage: parseInt(query?.perPage) || 10,
-    };
-
-    console.log('Car listing query:', parsedQuery);
-    const result = await this.carsService.getCarListing(parsedQuery);
+    console.log('Car listing query:', query);
+    const result = await this.carsService.getCarListing(query as any);
     console.log('Car listing result count:', result.data?.length || 0);
     return result;
   }

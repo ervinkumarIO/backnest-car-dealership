@@ -271,8 +271,8 @@ To test the progressive filtering:
 
 ## Files Modified
 
-- `src/cars/cars.service.ts` - Fixed `getFacets` method implementation
-- `src/cars/cars.controller.ts` - Removed `@AdminOnly()` decorator from facets endpoint
+- `src/cars/cars.service.ts` - Fixed `getFacets` method implementation and `getCarListing` method
+- `src/cars/cars.controller.ts` - Removed `@AdminOnly()` decorator from facets endpoint and simplified listing controller
 - `docs/PROGRESSIVE_FACETS_FILTERING.md` - This documentation file
 
 ## Related Issues Fixed
@@ -283,3 +283,5 @@ To test the progressive filtering:
 - ✅ Facets accessible to all authenticated users
 - ✅ Consistent filtering logic between listing and facets
 - ✅ Type safety improvements
+- ✅ Car listing endpoint now passes all query parameters to service
+- ✅ Controller simplified to follow single responsibility principle

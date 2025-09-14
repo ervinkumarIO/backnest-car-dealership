@@ -40,6 +40,10 @@ export class CarsService {
       ...filters
     } = query;
 
+    // Handle string to number conversion for pagination
+    const pageNum = typeof page === 'string' ? parseInt(page) || 1 : page;
+    const perPageNum = typeof perPage === 'string' ? parseInt(perPage) || 10 : perPage;
+
     // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
     const parsedFilters: Record<string, any> = {};
     Object.keys(filters).forEach((key) => {
@@ -118,16 +122,16 @@ export class CarsService {
     }
 
     // Apply pagination
-    const skip = (page - 1) * perPage;
-    queryBuilder.skip(skip).take(perPage);
+    const skip = (pageNum - 1) * perPageNum;
+    queryBuilder.skip(skip).take(perPageNum);
 
     const [cars, total] = await queryBuilder.getManyAndCount();
 
     return {
       data: cars,
-      currentPage: page,
-      lastPage: Math.ceil(total / perPage),
-      perPage,
+      currentPage: pageNum,
+      lastPage: Math.ceil(total / perPageNum),
+      perPage: perPageNum,
       total,
     };
   }
