@@ -29,6 +29,18 @@ export class CarsService {
     private s3Service: S3Service,
   ) {}
 
+  // Normalize values to title case for consistent grouping
+  private normalizeValue(value: string): string {
+    if (!value) return value;
+
+    // Convert to title case (first letter of each word capitalized)
+    return value
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
   // Car listing with search, sort, and pagination
   async getCarListing(query: CarListingQuery) {
     const {
@@ -39,6 +51,18 @@ export class CarsService {
       page = 1,
       ...filters
     } = query;
+
+    // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
+    const parsedFilters: Record<string, any> = {};
+    Object.keys(filters).forEach((key) => {
+      if (key.includes('[eq]')) {
+        // Handle brand[eq], model[eq], etc.
+        const fieldName = key.replace('[eq]', '');
+        parsedFilters[fieldName] = String(filters[key]);
+      } else {
+        parsedFilters[key] = String(filters[key]);
+      }
+    });
 
     const queryBuilder = this.carRepository
       .createQueryBuilder('car')
@@ -76,17 +100,25 @@ export class CarsService {
     }
 
     // Apply filters
-    Object.keys(filters).forEach((key) => {
+    Object.keys(parsedFilters).forEach((key) => {
       if (
-        filters[key] &&
+        parsedFilters[key] &&
         key !== 'search' &&
         key !== 'sortBy' &&
         key !== 'sortOrder' &&
         key !== 'perPage' &&
         key !== 'page'
       ) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        queryBuilder.andWhere(`car.${key} = :${key}`, { [key]: filters[key] });
+        // Regular field filtering - normalize the filter value for comparison
+        const normalizedFilterValue = this.normalizeValue(
+          String(parsedFilters[key]),
+        );
+        queryBuilder.andWhere(
+          `LOWER(TRIM(car.${key})) = LOWER(TRIM(:${key}))`,
+          {
+            [key]: normalizedFilterValue,
+          },
+        );
       }
     });
 
@@ -339,11 +371,23 @@ export class CarsService {
     };
   }
 
-  // Get facets for filtering with progressive filtering support
+  // Get facets for filtering with progressive filtering support (Laravel-style implementation)
   async getFacets(query: CarListingQuery) {
     const { search, ...filters } = query;
 
-    // Build the same query as getCarListing but without pagination
+    // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
+    const parsedFilters: Record<string, any> = {};
+    Object.keys(filters).forEach((key) => {
+      if (key.includes('[eq]')) {
+        // Handle brand[eq], model[eq], etc.
+        const fieldName = key.replace('[eq]', '');
+        parsedFilters[fieldName] = String(filters[key]);
+      } else {
+        parsedFilters[key] = String(filters[key]);
+      }
+    });
+
+    // Build query to get filtered cars
     const queryBuilder = this.carRepository
       .createQueryBuilder('car')
       .select([
@@ -371,18 +415,18 @@ export class CarsService {
         'car.public',
       ]);
 
-    // Apply search (case-insensitive)
+    // Apply search (case-insensitive) - Laravel style: starts with search term
     if (search) {
       queryBuilder.where(
-        '(LOWER(car.brand) LIKE LOWER(:search) OR LOWER(car.model) LIKE LOWER(:search) OR LOWER(car.variant) LIKE LOWER(:search) OR LOWER(car.chassisNo) LIKE LOWER(:search) OR LOWER(car.color) LIKE LOWER(:search))',
-        { search: `%${search}%` },
+        '(LOWER(car.brand) LIKE LOWER(:search) OR LOWER(car.model) LIKE LOWER(:search) OR LOWER(car.variant) LIKE LOWER(:search) OR LOWER(car.chassisNo) LIKE LOWER(:search))',
+        { search: `${search}%` },
       );
     }
 
-    // Apply filters (same logic as getCarListing)
-    Object.keys(filters).forEach((key) => {
+    // Apply other filters
+    Object.keys(parsedFilters).forEach((key) => {
       if (
-        filters[key] &&
+        parsedFilters[key] &&
         key !== 'search' &&
         key !== 'sortBy' &&
         key !== 'sortOrder' &&
@@ -391,35 +435,66 @@ export class CarsService {
       ) {
         // Handle price range filtering
         if (key === 'price_min') {
-          const priceMin = Number(filters[key]);
+          const priceMin = Number(parsedFilters[key]);
           if (!isNaN(priceMin)) {
             queryBuilder.andWhere('car.price >= :price_min', {
               price_min: priceMin,
             });
           }
         } else if (key === 'price_max') {
-          const priceMax = Number(filters[key]);
+          const priceMax = Number(parsedFilters[key]);
           if (!isNaN(priceMax)) {
             queryBuilder.andWhere('car.price <= :price_max', {
               price_max: priceMax,
             });
           }
         } else {
-          // Regular field filtering
-          queryBuilder.andWhere(`car.${key} = :${key}`, {
-            [key]: String(filters[key]),
-          });
+          // Regular field filtering - normalize the filter value for comparison
+          const normalizedFilterValue = this.normalizeValue(
+            String(parsedFilters[key]),
+          );
+          queryBuilder.andWhere(
+            `LOWER(TRIM(car.${key})) = LOWER(TRIM(:${key}))`,
+            {
+              [key]: normalizedFilterValue,
+            },
+          );
         }
       }
     });
 
-    // Get filtered cars (no pagination for facets)
-    const cars = await queryBuilder.getMany();
+    // Get filtered cars
+    const filteredCars = await queryBuilder.getMany();
 
-    const facets = {};
-    const chassisNumbers = cars.map((car) => car.chassisNo);
+    // Get the total filtered count for debugging
+    const totalFilteredCount = filteredCars.length;
+    console.log('Total filtered cars:', totalFilteredCount);
 
-    // Build facets for each field based on filtered results
+    // Convert query keys for easier checking (e.g., brand[eq] => brand)
+    const queryKeys = Object.keys(filters);
+    const queryFields = queryKeys
+      .map((key) => key.split('[')[0])
+      .filter((field, index, arr) => arr.indexOf(field) === index);
+
+    // Track which fields have filters and their values
+    const activeFilters: Record<string, string> = {};
+    Object.keys(parsedFilters).forEach((key) => {
+      if (
+        parsedFilters[key] &&
+        key !== 'search' &&
+        key !== 'sortBy' &&
+        key !== 'sortOrder' &&
+        key !== 'perPage' &&
+        key !== 'page'
+      ) {
+        activeFilters[key] = String(parsedFilters[key]);
+      }
+    });
+
+    const facetCounts: Record<string, any> = {};
+    const chassisNumbers: string[] = [];
+
+    // Get all column names from the cars table (exclude specific columns from faceting)
     const fields = [
       'brand',
       'model',
@@ -430,46 +505,72 @@ export class CarsService {
       'fuelType',
       'grade',
       'condition',
+      'status',
+      'branch',
+      'public',
     ];
 
-    fields.forEach((field) => {
-      const fieldValues = cars.reduce(
-        (acc: Record<string, number>, car) => {
-          const value = (car as unknown as Record<string, unknown>)[
-            field
-          ] as string;
-          if (value) {
-            acc[value] = (acc[value] || 0) + 1;
-          }
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-
-      if (Object.keys(fieldValues).length > 0) {
-        facets[field] = fieldValues;
+    for (const field of fields) {
+      // Skip model field if brand is not in the query (Laravel logic)
+      if (field === 'model' && !queryFields.includes('brand')) {
+        continue;
       }
-    });
 
-    // Add price range facets
-    if (cars.length > 0) {
-      const prices = cars
-        .map((car) => car.price)
-        .filter((price) => price != null);
-      if (prices.length > 0) {
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
-        facets['price_range'] = {
-          min: minPrice,
-          max: maxPrice,
-          count: cars.length,
-        };
+      // If this field has an active filter, only show the filtered value
+      if (activeFilters[field]) {
+        // This field is in the query, only show the selected value and its count
+        const count = filteredCars.length;
+        if (count > 0) {
+          const normalizedFilterValue = this.normalizeValue(
+            activeFilters[field],
+          );
+          facetCounts[field] = {
+            [normalizedFilterValue]: count,
+          };
+        }
+      } else {
+        // This field is NOT in the query, show all unique values from the filtered results
+        if (field === 'chassisNo') {
+          // For chassisNo, store in separate array
+          chassisNumbers.push(...filteredCars.map((car) => car.chassisNo));
+        } else {
+          const fieldCounts: Record<string, number> = {};
+
+          filteredCars.forEach((car) => {
+            const value = (car as unknown as Record<string, unknown>)[
+              field
+            ] as string;
+            if (value) {
+              // Normalize value to title case for consistent grouping
+              const normalizedValue = this.normalizeValue(value);
+              fieldCounts[normalizedValue] =
+                (fieldCounts[normalizedValue] || 0) + 1;
+            }
+          });
+
+          // Sort by count descending and filter out zero counts
+          const sortedFieldCounts = Object.entries(fieldCounts)
+            .filter(([, count]) => count > 0)
+            .sort(([, a], [, b]) => b - a)
+            .reduce(
+              (acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+              },
+              {} as Record<string, number>,
+            );
+
+          // Only include the field if it has values
+          if (Object.keys(sortedFieldCounts).length > 0) {
+            facetCounts[field] = sortedFieldCounts;
+          }
+        }
       }
     }
 
     return {
-      chassis_numbers: chassisNumbers,
-      facets,
+      chassis_numbers: [...new Set(chassisNumbers)], // Remove duplicates
+      facets: facetCounts,
     };
   }
 

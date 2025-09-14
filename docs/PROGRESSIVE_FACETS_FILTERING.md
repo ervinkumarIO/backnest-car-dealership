@@ -1,4 +1,4 @@
-# Progressive Facets Filtering Fix
+# Progressive Facets Filtering Fix (Laravel-Style Implementation)
 
 ## Problem Description
 
@@ -9,9 +9,21 @@ The facets functionality was not working correctly for progressive filtering. Wh
 2. User then selects `brand=Mercedes` → Should only show facets for Mercedes cars under 100k
 3. But the old implementation always showed facets for ALL cars regardless of applied filters
 
+## Laravel Reference Implementation
+
+The implementation was updated to match the Laravel version's sophisticated logic, which includes:
+- **Smart field filtering**: Only show model options when brand is selected
+- **Active filter tracking**: Show selected values with their counts
+- **Progressive narrowing**: Each filter further narrows down available options
+- **Sorted results**: Facets sorted by count (descending)
+- **Case normalization**: "Toyota" and "TOYOTA" are treated as the same brand
+
 ## Root Cause
 
-The `getFacets` method in `CarsService` was completely ignoring the query parameters and just returning facets for ALL cars:
+The `getFacets` method in `CarsService` had two issues:
+
+1. **Ignoring query parameters**: The method was completely ignoring the query parameters and just returning facets for ALL cars
+2. **Frontend query format mismatch**: The frontend sends `brand[eq]=Mercedes` but the backend expected `brand=Mercedes`
 
 ```typescript
 // OLD IMPLEMENTATION (BROKEN)
@@ -27,14 +39,46 @@ async getFacets(_query: any) {
 
 ## Solution
 
-### 1. **Fixed Progressive Filtering Logic**
+### 1. **Laravel-Style Progressive Filtering Logic**
 
-The new implementation applies the same filtering logic as `getCarListing` but without pagination:
+The new implementation matches the Laravel version's sophisticated logic:
 
 ```typescript
-// NEW IMPLEMENTATION (FIXED)
+// NEW IMPLEMENTATION (LARAVEL-STYLE)
 async getFacets(query: CarListingQuery) {
   const { search, ...filters } = query;
+
+  // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
+  const parsedFilters: Record<string, any> = {};
+  Object.keys(filters).forEach((key) => {
+    if (key.includes('[eq]')) {
+      // Handle brand[eq], model[eq], etc.
+      const fieldName = key.replace('[eq]', '');
+      parsedFilters[fieldName] = String(filters[key]);
+    } else {
+      parsedFilters[key] = String(filters[key]);
+    }
+  });
+
+  // Track which fields have active filters
+  const activeFilters: Record<string, string> = {};
+  Object.keys(parsedFilters).forEach((key) => {
+    if (parsedFilters[key] && key !== 'search' && key !== 'sortBy' && key !== 'sortOrder' && key !== 'perPage' && key !== 'page') {
+      activeFilters[key] = String(parsedFilters[key]);
+    }
+  });
+
+  // Normalize values to title case for consistent grouping
+  private normalizeValue(value: string): string {
+    if (!value) return value;
+    
+    // Convert to title case (first letter of each word capitalized)
+    return value
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
 
   // Build the same query as getCarListing but without pagination
   const queryBuilder = this.carRepository
@@ -49,38 +93,52 @@ async getFacets(query: CarListingQuery) {
     );
   }
 
-  // Apply filters (same logic as getCarListing)
-  Object.keys(filters).forEach((key) => {
-    if (filters[key] && key !== 'search' && key !== 'sortBy' && key !== 'sortOrder' && key !== 'perPage' && key !== 'page') {
-      // Handle price range filtering
-      if (key === 'price_min') {
-        const priceMin = Number(filters[key]);
-        if (!isNaN(priceMin)) {
-          queryBuilder.andWhere('car.price >= :price_min', {
-            price_min: priceMin,
-          });
+  // Apply filters and get filtered cars
+  const filteredCars = await queryBuilder.getMany();
+
+  // Laravel-style facet building logic
+  for (const field of fields) {
+    // Skip model field if brand is not in the query (Laravel logic)
+    if (field === 'model' && !queryFields.includes('brand')) {
+      continue;
+    }
+
+    // If this field has an active filter, only show the filtered value
+    if (activeFilters[field]) {
+      // This field is in the query, only show the selected value and its count
+      const count = filteredCars.length;
+      if (count > 0) {
+        facetCounts[field] = {
+          [activeFilters[field]]: count,
+        };
+      }
+    } else {
+      // This field is NOT in the query, show all unique values from the filtered results
+      const fieldCounts = {};
+      filteredCars.forEach((car) => {
+        const value = car[field];
+        if (value) {
+          // Normalize value to title case for consistent grouping
+          const normalizedValue = this.normalizeValue(value);
+          fieldCounts[normalizedValue] = (fieldCounts[normalizedValue] || 0) + 1;
         }
-      } else if (key === 'price_max') {
-        const priceMax = Number(filters[key]);
-        if (!isNaN(priceMax)) {
-          queryBuilder.andWhere('car.price <= :price_max', {
-            price_max: priceMax,
-          });
-        }
-      } else {
-        // Regular field filtering
-        queryBuilder.andWhere(`car.${key} = :${key}`, {
-          [key]: String(filters[key]),
-        });
+      });
+
+      // Sort by count descending and filter out zero counts
+      const sortedFieldCounts = Object.entries(fieldCounts)
+        .filter(([, count]) => count > 0)
+        .sort(([, a], [, b]) => b - a)
+        .reduce((acc, [key, value]) => {
+          acc[key] = value;
+          return acc;
+        }, {});
+
+      // Only include the field if it has values
+      if (Object.keys(sortedFieldCounts).length > 0) {
+        facetCounts[field] = sortedFieldCounts;
       }
     }
-  });
-
-  // Get filtered cars (no pagination for facets)
-  const cars = await queryBuilder.getMany();
-
-  // Build facets from FILTERED cars only
-  // ...
+  }
 }
 ```
 
@@ -144,13 +202,13 @@ async getFacets(@Query() query: any) {
 
 3. **After Brand Filter** (Mercedes under 100k):
    ```
-   GET /api/v1/cars/facets?price_max=100000&brand=Mercedes
+   GET /api/v1/cars/facets?price_max=100000&brand%5Beq%5D=Mercedes
    ```
    Returns facets only for Mercedes cars under 100,000.
 
 4. **After Year Filter** (2023 Mercedes under 100k):
    ```
-   GET /api/v1/cars/facets?price_max=100000&brand=Mercedes&year=2023
+   GET /api/v1/cars/facets?price_max=100000&brand%5Beq%5D=Mercedes&year%5Beq%5D=2023
    ```
    Returns facets only for 2023 Mercedes cars under 100,000.
 
@@ -236,7 +294,7 @@ To test the progressive filtering:
 
 3. **Test with multiple filters**:
    ```bash
-   curl "http://localhost:3000/api/v1/cars/facets?price_max=100000&brand=Mercedes&year=2023"
+   curl "http://localhost:3000/api/v1/cars/facets?price_max=100000&brand%5Beq%5D=Mercedes&year%5Beq%5D=2023"
    ```
 
 4. **Test with search**:
@@ -246,12 +304,16 @@ To test the progressive filtering:
 
 ## Benefits
 
-1. **Progressive Filtering**: Facets now correctly narrow down as filters are applied
-2. **Consistent Behavior**: Facets use the same filtering logic as car listings
-3. **Price Range Support**: Added price range information in facets
-4. **Better UX**: Users see accurate counts for available options
-5. **Accessible to All Users**: Removed admin-only restriction
-6. **Type Safety**: Added proper type checking for price filters
+1. **Laravel-Style Progressive Filtering**: Facets now work exactly like the Laravel version
+2. **Smart Field Logic**: Model field only shows when brand is selected
+3. **Active Filter Tracking**: Selected values show with their counts
+4. **Sorted Results**: Facets sorted by count (descending) for better UX
+5. **Case Normalization**: "Toyota" and "TOYOTA" are treated as the same brand
+6. **Frontend Compatibility**: Handles the frontend's `brand[eq]=Mercedes` query format
+7. **Consistent Behavior**: Facets use the same filtering logic as car listings
+8. **Better UX**: Users see accurate counts for available options
+9. **Accessible to All Users**: Removed admin-only restriction
+10. **Type Safety**: Added proper type checking for all filters
 
 ## Files Modified
 
@@ -261,8 +323,12 @@ To test the progressive filtering:
 
 ## Related Issues Fixed
 
-- ✅ Progressive filtering now works correctly
-- ✅ Price range filtering supported
+- ✅ Laravel-style progressive filtering implemented
+- ✅ Smart field logic (model only shows when brand selected)
+- ✅ Active filter tracking with counts
+- ✅ Sorted facets by count (descending)
+- ✅ Case normalization ("Toyota" = "TOYOTA")
+- ✅ Frontend query format compatibility (`brand[eq]=Mercedes`)
 - ✅ Facets accessible to all authenticated users
 - ✅ Consistent filtering logic between listing and facets
 - ✅ Type safety improvements
