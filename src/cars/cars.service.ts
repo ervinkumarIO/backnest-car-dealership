@@ -581,6 +581,39 @@ export class CarsService {
       ...filters
     } = query;
 
+    // Coerce pagination
+    const pageNum = typeof page === 'string' ? parseInt(page) || 1 : page;
+    const perPageNum =
+      typeof perPage === 'string' ? parseInt(perPage) || 21 : perPage;
+
+    // Parse bracketed operators to internal filters
+    const parsedFilters: Record<string, string | number> = {};
+    Object.keys(filters).forEach((key) => {
+      const value = filters[key];
+      if (key.includes('[eq]')) {
+        const fieldName = key.replace('[eq]', '');
+        parsedFilters[fieldName] = String(value);
+      } else if (key.includes('[lte]')) {
+        const fieldName = key.replace('[lte]', '');
+        const num = Number(value);
+        if (!isNaN(num)) parsedFilters[`${fieldName}_max`] = num;
+      } else if (key.includes('[gte]')) {
+        const fieldName = key.replace('[gte]', '');
+        const num = Number(value);
+        if (!isNaN(num)) parsedFilters[`${fieldName}_min`] = num;
+      } else if (key.includes('[lt]')) {
+        const fieldName = key.replace('[lt]', '');
+        const num = Number(value);
+        if (!isNaN(num)) parsedFilters[`${fieldName}_max`] = num - 1;
+      } else if (key.includes('[gt]')) {
+        const fieldName = key.replace('[gt]', '');
+        const num = Number(value);
+        if (!isNaN(num)) parsedFilters[`${fieldName}_min`] = num + 1;
+      } else {
+        parsedFilters[key] = String(value);
+      }
+    });
+
     const queryBuilder = this.carRepository
       .createQueryBuilder('car')
       .where('car.public = :public', { public: 'yes' })
@@ -595,17 +628,30 @@ export class CarsService {
     }
 
     // Apply additional filters
-    Object.keys(filters).forEach((key) => {
+    Object.keys(parsedFilters).forEach((key) => {
       if (
-        filters[key] &&
+        parsedFilters[key] &&
         key !== 'search' &&
         key !== 'sortBy' &&
         key !== 'sortOrder' &&
         key !== 'perPage' &&
         key !== 'page'
       ) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        queryBuilder.andWhere(`car.${key} = :${key}`, { [key]: filters[key] });
+        if (key.endsWith('_min')) {
+          const fieldName = key.replace('_min', '');
+          queryBuilder.andWhere(`car.${fieldName} >= :${key}`, {
+            [key]: parsedFilters[key],
+          });
+        } else if (key.endsWith('_max')) {
+          const fieldName = key.replace('_max', '');
+          queryBuilder.andWhere(`car.${fieldName} <= :${key}`, {
+            [key]: parsedFilters[key],
+          });
+        } else {
+          queryBuilder.andWhere(`car.${key} = :${key}`, {
+            [key]: String(parsedFilters[key]),
+          });
+        }
       }
     });
 
@@ -619,15 +665,15 @@ export class CarsService {
     }
 
     // Apply pagination
-    const skip = (page - 1) * perPage;
-    queryBuilder.skip(skip).take(perPage);
+    const skip = (pageNum - 1) * perPageNum;
+    queryBuilder.skip(skip).take(perPageNum);
 
     const [cars, total] = await queryBuilder.getManyAndCount();
 
     return {
       data: cars,
-      currentPage: page,
-      lastPage: Math.ceil(total / perPage),
+      currentPage: pageNum,
+      lastPage: Math.ceil(total / perPageNum),
       total,
     };
   }
