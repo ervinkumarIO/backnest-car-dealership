@@ -201,21 +201,32 @@ async getFacets(@Query() query: any) {
 
 The facets endpoint now supports all the same filter parameters as the car listing endpoint:
 
+### **Exact Match Filters** (using `[eq]`):
 - `search` - Text search across brand, model, variant, chassisNo, color
-- `brand` - Filter by car brand
-- `model` - Filter by car model
-- `variant` - Filter by car variant
-- `year` - Filter by manufacturing year
-- `color` - Filter by car color
-- `transmission` - Filter by transmission type
-- `fuelType` - Filter by fuel type
-- `grade` - Filter by car grade
-- `condition` - Filter by car condition
-- `price_min` - Minimum price filter
-- `price_max` - Maximum price filter
-- `status` - Filter by car status
-- `public` - Filter by public visibility
-- `branch` - Filter by branch
+- `brand[eq]` - Filter by car brand
+- `model[eq]` - Filter by car model
+- `variant[eq]` - Filter by car variant
+- `year[eq]` - Filter by manufacturing year
+- `color[eq]` - Filter by car color
+- `transmission[eq]` - Filter by transmission type
+- `fuelType[eq]` - Filter by fuel type
+- `grade[eq]` - Filter by car grade
+- `condition[eq]` - Filter by car condition
+- `status[eq]` - Filter by car status
+- `public[eq]` - Filter by public visibility
+- `branch[eq]` - Filter by branch
+
+### **Range Filters** (using `[lte]`, `[gte]`, `[lt]`, `[gt]`):
+- `price[lte]` - Price less than or equal to
+- `price[gte]` - Price greater than or equal to
+- `price[lt]` - Price less than
+- `price[gt]` - Price greater than
+- `mileage[lte]` - Mileage less than or equal to
+- `mileage[gte]` - Mileage greater than or equal to
+- `mileage[lt]` - Mileage less than
+- `mileage[gt]` - Mileage greater than
+- `year[lte]` - Year less than or equal to
+- `year[gte]` - Year greater than or equal to
 
 ## API Endpoints
 
@@ -251,10 +262,15 @@ To test the progressive filtering:
 
 3. **Test with multiple filters**:
    ```bash
-   curl "http://localhost:3000/api/v1/cars/facets?price_max=100000&brand%5Beq%5D=Mercedes&year%5Beq%5D=2023"
+   curl "http://localhost:3000/api/v1/cars/facets?price%5Blte%5D=100000&brand%5Beq%5D=Mercedes&year%5Beq%5D=2023"
    ```
 
-4. **Test with search**:
+4. **Test with range filters**:
+   ```bash
+   curl "http://localhost:3000/api/v1/cars/facets?mileage%5Blte%5D=20000&price%5Blte%5D=300000"
+   ```
+
+5. **Test with search**:
    ```bash
    curl "http://localhost:3000/api/v1/cars/facets?search=toyota"
    ```
@@ -279,7 +295,8 @@ To test the progressive filtering:
 
 - ✅ Progressive filtering now works correctly
 - ✅ Frontend query format compatibility (`brand[eq]=Mercedes`)
-- ✅ Price range filtering supported
+- ✅ Range operator support (`[lte]`, `[gte]`, `[lt]`, `[gt]`)
+- ✅ Price and mileage range filtering supported
 - ✅ Facets accessible to all authenticated users
 - ✅ Consistent filtering logic between listing and facets
 - ✅ Type safety improvements

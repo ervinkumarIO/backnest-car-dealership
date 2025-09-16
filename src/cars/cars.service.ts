@@ -41,16 +41,46 @@ export class CarsService {
     } = query;
 
     // Handle string to number conversion for pagination
-    const pageNum = typeof page === 'string' ? parseInt(page) || 1 : page;
-    const perPageNum = typeof perPage === 'string' ? parseInt(perPage) || 10 : perPage;
+    const pageNum =
+      typeof page === 'string' ? parseInt(page) || 1 : page;
+    const perPageNum =
+      typeof perPage === 'string' ? parseInt(perPage) || 10 : perPage;
 
-    // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
+    // Parse frontend query format with range operators
     const parsedFilters: Record<string, any> = {};
     Object.keys(filters).forEach((key) => {
       if (key.includes('[eq]')) {
-        // Handle brand[eq], model[eq], etc.
+        // Handle brand[eq], model[eq], etc. (equals)
         const fieldName = key.replace('[eq]', '');
         parsedFilters[fieldName] = String(filters[key]);
+      } else if (key.includes('[lte]')) {
+        // Handle mileage[lte], price[lte], etc. (less than or equal)
+        const fieldName = key.replace('[lte]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_max`] = value;
+        }
+      } else if (key.includes('[gte]')) {
+        // Handle mileage[gte], price[gte], etc. (greater than or equal)
+        const fieldName = key.replace('[gte]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_min`] = value;
+        }
+      } else if (key.includes('[lt]')) {
+        // Handle mileage[lt], price[lt], etc. (less than)
+        const fieldName = key.replace('[lt]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_max`] = value - 1; // Convert to lte
+        }
+      } else if (key.includes('[gt]')) {
+        // Handle mileage[gt], price[gt], etc. (greater than)
+        const fieldName = key.replace('[gt]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_min`] = value + 1; // Convert to gte
+        }
       } else {
         parsedFilters[key] = String(filters[key]);
       }
@@ -101,9 +131,23 @@ export class CarsService {
         key !== 'perPage' &&
         key !== 'page'
       ) {
-        queryBuilder.andWhere(`car.${key} = :${key}`, {
-          [key]: String(parsedFilters[key]),
-        });
+        // Handle range filters (price_min, price_max, mileage_min, mileage_max)
+        if (key.endsWith('_min')) {
+          const fieldName = key.replace('_min', '');
+          queryBuilder.andWhere(`car.${fieldName} >= :${key}`, {
+            [key]: parsedFilters[key],
+          });
+        } else if (key.endsWith('_max')) {
+          const fieldName = key.replace('_max', '');
+          queryBuilder.andWhere(`car.${fieldName} <= :${key}`, {
+            [key]: parsedFilters[key],
+          });
+        } else {
+          // Handle exact match filters
+          queryBuilder.andWhere(`car.${key} = :${key}`, {
+            [key]: String(parsedFilters[key]),
+          });
+        }
       }
     });
 
@@ -360,13 +404,41 @@ export class CarsService {
   async getFacets(query: CarListingQuery) {
     const { search, ...filters } = query;
 
-    // Parse frontend query format (brand[eq]=Mercedes -> brand=Mercedes)
+    // Parse frontend query format with range operators
     const parsedFilters: Record<string, any> = {};
     Object.keys(filters).forEach((key) => {
       if (key.includes('[eq]')) {
-        // Handle brand[eq], model[eq], etc.
+        // Handle brand[eq], model[eq], etc. (equals)
         const fieldName = key.replace('[eq]', '');
         parsedFilters[fieldName] = String(filters[key]);
+      } else if (key.includes('[lte]')) {
+        // Handle mileage[lte], price[lte], etc. (less than or equal)
+        const fieldName = key.replace('[lte]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_max`] = value;
+        }
+      } else if (key.includes('[gte]')) {
+        // Handle mileage[gte], price[gte], etc. (greater than or equal)
+        const fieldName = key.replace('[gte]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_min`] = value;
+        }
+      } else if (key.includes('[lt]')) {
+        // Handle mileage[lt], price[lt], etc. (less than)
+        const fieldName = key.replace('[lt]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_max`] = value - 1; // Convert to lte
+        }
+      } else if (key.includes('[gt]')) {
+        // Handle mileage[gt], price[gt], etc. (greater than)
+        const fieldName = key.replace('[gt]', '');
+        const value = Number(filters[key]);
+        if (!isNaN(value)) {
+          parsedFilters[`${fieldName}_min`] = value + 1; // Convert to gte
+        }
       } else {
         parsedFilters[key] = String(filters[key]);
       }
@@ -418,23 +490,19 @@ export class CarsService {
         key !== 'perPage' &&
         key !== 'page'
       ) {
-        // Handle price range filtering
-        if (key === 'price_min') {
-          const priceMin = Number(parsedFilters[key]);
-          if (!isNaN(priceMin)) {
-            queryBuilder.andWhere('car.price >= :price_min', {
-              price_min: priceMin,
-            });
-          }
-        } else if (key === 'price_max') {
-          const priceMax = Number(parsedFilters[key]);
-          if (!isNaN(priceMax)) {
-            queryBuilder.andWhere('car.price <= :price_max', {
-              price_max: priceMax,
-            });
-          }
+        // Handle range filters (price_min, price_max, mileage_min, mileage_max)
+        if (key.endsWith('_min')) {
+          const fieldName = key.replace('_min', '');
+          queryBuilder.andWhere(`car.${fieldName} >= :${key}`, {
+            [key]: parsedFilters[key],
+          });
+        } else if (key.endsWith('_max')) {
+          const fieldName = key.replace('_max', '');
+          queryBuilder.andWhere(`car.${fieldName} <= :${key}`, {
+            [key]: parsedFilters[key],
+          });
         } else {
-          // Regular field filtering
+          // Handle exact match filters
           queryBuilder.andWhere(`car.${key} = :${key}`, {
             [key]: String(parsedFilters[key]),
           });
